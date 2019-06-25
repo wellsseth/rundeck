@@ -16,6 +16,7 @@
 
 package rundeck.services
 
+import com.dtolabs.rundeck.app.api.marshall.ApiVersion
 import com.dtolabs.rundeck.core.authorization.AuthorizationUtil
 import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
 import com.dtolabs.rundeck.core.authorization.Validation
@@ -919,7 +920,7 @@ class ApiService {
      */
     public def respondExecutionsXml(HttpServletRequest request,HttpServletResponse response,execlist,paging=[:]) {
         renderSuccessXml(request,response){
-            renderExecutionsXml(execlist, paging, delegate)
+            renderExecutionsXml(execlist, paging, delegate, request.api_version)
         }
     }
     /**
@@ -927,14 +928,14 @@ class ApiService {
      */
     public def respondExecutionsJson(HttpServletRequest request,HttpServletResponse response,execlist,paging=[:]) {
         renderSuccessJson(response){
-            renderExecutionsJson(execlist, paging, delegate)
+            renderExecutionsJson(execlist, paging, delegate, request.api_version)
         }
     }
     /**
      * Render execution list xml given a List of executions, and a builder delegate
      * @param execlist list of Maps containing [execution:Execution, href: URL to execution, status: rendered status text, summary: rendered summary text]
      */
-    public def renderExecutionsXml(execlist, paging = [:], delegate){
+    public def renderExecutionsXml(execlist, paging, delegate, api_version) {
         def execAttrs = [count: execlist.size()]
         if (paging) {
             execAttrs.putAll(paging)
@@ -959,6 +960,12 @@ class ApiService {
                     delegate.'date-started'(unixtime: e.dateStarted.time, w3cDateValue(e.dateStarted))
                     if (null != e.dateCompleted) {
                         delegate.'date-ended'(unixtime: e.dateCompleted.time, w3cDateValue(e.dateCompleted))
+                    }
+                    if (api_version && api_version < ApiVersions.V32) {
+                        delegate.'executionType'(e.executionType)
+                    } else {
+                        def provenance = e.provenanceInfo
+                        delegate.provenance([type: provenance.type] + provenance.meta)
                     }
 
                     if(e.customStatusString){
@@ -1025,7 +1032,7 @@ class ApiService {
      * Render execution list json given a List of executions, and a builder delegate
      * @param execlist list of Maps containing [execution:Execution, href: URL to execution, status: rendered status text, summary: rendered summary text]
      */
-    public def renderExecutionsJson(execlist, paging = [:], delegate){
+    public def renderExecutionsJson(execlist, paging, delegate, api_version) {
         def execAttrs = [count: execlist.size()]
         boolean isSingle=paging.single && execlist.size()==1
         if (paging) {
@@ -1044,8 +1051,13 @@ class ApiService {
                         permalink: execdata.permalink,
                         status: status,
                         project: e.project,
-                        executionType:e.executionType
                 ]
+            if (api_version && api_version < ApiVersions.V32) {
+                execMap.executionType = e.executionType
+            } else {
+                def provenance = e.provenanceInfo
+                execMap.provenance = [type: provenance.type, meta: provenance.meta]
+            }
             if(execdata.customStatus){
                 execMap['customStatus']=execdata.customStatus
             }

@@ -20,6 +20,9 @@ import com.dtolabs.rundeck.app.support.DomainIndexHelper
 import com.dtolabs.rundeck.app.support.ExecutionContext
 import com.dtolabs.rundeck.core.common.FrameworkResource
 import com.dtolabs.rundeck.util.XmlParserUtil
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.rundeck.core.executions.Provenance
+import org.rundeck.core.executions.ProvenanceImpl
 import rundeck.services.ExecutionService
 
 /**
@@ -39,6 +42,8 @@ class Execution extends ExecutionContext {
     Boolean timedOut=false
     Workflow workflow
     String executionType
+    String provenanceData
+
     Integer retryAttempt=0
     Boolean willRetry=false
     Execution retryExecution
@@ -49,7 +54,7 @@ class Execution extends ExecutionContext {
     Long retryOriginalId
 
     static hasOne = [logFileStorageRequest: LogFileStorageRequest]
-    static transients = ['executionState', 'customStatusString', 'userRoles']
+    static transients = ['executionState', 'customStatusString', 'userRoles', 'provenance']
     static constraints = {
         project(matches: FrameworkResource.VALID_RESOURCE_NAME_REGEX, validator:{val,Execution obj->
             if(obj.scheduledExecution && obj.scheduledExecution.project!=val){
@@ -99,6 +104,7 @@ class Execution extends ExecutionContext {
         retry(maxSize: 256, blank: true, nullable: true,matches: /^\d+$/)
         timedOut(nullable: true)
         executionType(nullable: true, maxSize: 30)
+        provenanceData(nullable: true)
         retryAttempt(nullable: true)
         retryExecution(nullable: true)
         willRetry(nullable: true)
@@ -137,6 +143,7 @@ class Execution extends ExecutionContext {
         timeout( type: 'text')
         retry( type: 'text')
         userRoleList(type: 'text')
+        provenanceData(type: 'text')
         serverNodeUUID(type: 'string')
 
         DomainIndexHelper.generate(delegate) {
@@ -253,6 +260,31 @@ class Execution extends ExecutionContext {
         return "com.dtolabs.rundeck.core."+this.command
     }
 
+    public Map getProvenance() {
+        //de-serialize the json
+        if (null != provenanceData) {
+            final ObjectMapper mapper = new ObjectMapper()
+            return mapper.readValue(provenanceData, Map.class)
+        } else {
+            return null
+        }
+
+    }
+
+    public void setProvenance(Map obj) {
+        //serialize json and store into field
+        if (null != obj) {
+            final ObjectMapper mapper = new ObjectMapper()
+            provenanceData = mapper.writeValueAsString(obj)
+        } else {
+            provenanceData = null
+        }
+    }
+    public Provenance getProvenanceInfo(){
+        Map<String,String> provenanceMap=getProvenance()
+        return ProvenanceImpl.builder().type(executionType).meta(provenanceMap).build()
+    }
+
     def Map toMap(){
         def map=[:]
         if(scheduledExecution){
@@ -278,6 +310,10 @@ class Execution extends ExecutionContext {
         map.doNodedispatch= this.doNodedispatch
         if(this.executionType) {
             map.executionType=executionType
+        }
+        def provenanceMap = getProvenance()
+        if (provenanceMap) {
+            map.provenance = provenanceMap
         }
         if(this.retryAttempt){
             map.retryAttempt=retryAttempt
@@ -340,6 +376,9 @@ class Execution extends ExecutionContext {
         exec.timeout = data.timeout
         if(data.executionType) {
             exec.executionType = data.executionType
+        }
+        if (data.provenance && data.provenance instanceof Map) {
+            exec.provenance = data.provenance
         }
         if(data.retryAttempt){
             exec.retryAttempt= XmlParserUtil.stringToInt(data.retryAttempt, 0)

@@ -952,6 +952,12 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         }
         jobcontext.execid = execution.id.toString()
         jobcontext.executionType = execution.executionType
+        def provenanceMeta = execution.provenanceInfo.meta
+        if (provenanceMeta) {
+            provenanceMeta.each { k, v ->
+                jobcontext.put('provenance.' + k, v)
+            }
+        }
         jobcontext.serverUrl = generateServerURL(grailsLinkGenerator)
         jobcontext.url = generateExecutionURL(execution,grailsLinkGenerator)
         jobcontext.serverUUID = execution.serverNodeUUID
@@ -1063,6 +1069,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                     workflowlogger
             );
 
+            //todo: hook for wf state listener
             WorkflowExecutionListener execStateListener = workflowService.createWorkflowStateListenerForExecution(
                     execution,
                     framework,
@@ -1877,6 +1884,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                                       workflow:params.workflow,
                                       argString:params.argString,
                                       executionType: params.executionType ?: 'scheduled',
+                                      provenance: params.provenance ?: [:],
                                       timeout:params.timeout?:null,
                                       retryAttempt:params.retryAttempt?:0,
                                       retryOriginalId:params.retryOriginalId?:null,
@@ -2027,7 +2035,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         try {
 
             Map allowedOptions = input.subMap(
-                    ['loglevel', 'argString', 'option', '_replaceNodeFilters', 'filter', 'executionType',
+                    ['loglevel', 'argString', 'option', '_replaceNodeFilters', 'filter', 'executionType','provenance',
                      'retryAttempt', 'nodeoverride', 'nodefilter','retryOriginalId']
             ).findAll { it.value != null }
             allowedOptions.putAll(input.findAll { it.key.startsWith('option.') || it.key.startsWith('nodeInclude') || it.key.startsWith('nodeExclude') }.findAll { it.value != null })
@@ -2094,6 +2102,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             Map allowedOptions = input.subMap(['loglevel', 'argString', 'option', '_replaceNodeFilters', 'filter',
                                                'nodeoverride', 'nodefilter',
                                                'executionType',
+                                               'provenance',
                                                'retryAttempt']).findAll { it.value != null }
             allowedOptions.putAll(input.findAll {
                         it.key.startsWith('option.') || it.key.startsWith('nodeInclude') ||
@@ -2255,11 +2264,11 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             props.putAll(input.findAll{it.key.startsWith('option.') && it.value!=null})
         }
 
-        if (input && input['executionType']) {
-            props.executionType = input['executionType']
-        } else {
+        if (!(input && input['executionType'])) {
             throw new ExecutionServiceException("executionType is required")
         }
+        props.executionType = input['executionType']
+        props.provenance = input['provenance']||[:]
 
         //evaluate embedded Job options for validation
         HashMap optparams = validateJobInputOptions(props, se, authContext)
@@ -2735,6 +2744,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                     def input = [
                             argString    : execution.argString,
                             executionType: execution.executionType,
+                            provenance   : execution.provenance,
                             loglevel     : execution.loglevel,
                             filter       : execution.filter //TODO: failed nodes?
                     ]

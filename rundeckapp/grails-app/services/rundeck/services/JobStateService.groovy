@@ -265,31 +265,62 @@ class JobStateService implements AuthorizingJobService {
 
     @Override
     ExecutionReference runJob(
-        UserAndRolesAuthContext auth,
-        JobReference jobReference,
-        String jobArgString,
-        String jobFilter,
-        String asUser
+            UserAndRolesAuthContext auth,
+            JobReference jobReference,
+            String executionType,
+            Map<String, String> provenance,
+            String jobArgString,
+            String jobFilter,
+            String asUser
     )
-        throws JobNotFound, JobExecutionError {
-        def inputOpts = ["argString": jobArgString]
+            throws JobNotFound, JobExecutionError {
+
+        def inputOpts = ["argString": jobArgString, executionType: executionType, provenance: provenance]
         return doRunJob(jobFilter, inputOpts, jobReference, auth, asUser)
     }
 
     @Override
     ExecutionReference runJob(
-        UserAndRolesAuthContext auth,
-        JobReference jobReference,
-        Map optionData,
-        String jobFilter,
-        String asUser
+            UserAndRolesAuthContext auth,
+            JobReference jobReference,
+            String jobArgString,
+            String jobFilter,
+            String asUser
     )
         throws JobNotFound, JobExecutionError {
-        def inputOpts = [:]
+        return runJob(auth, jobReference, 'user', [:], jobArgString, jobFilter, asUser)
+    }
+
+    @Override
+    ExecutionReference runJob(
+            UserAndRolesAuthContext auth,
+            JobReference jobReference,
+            String executionType,
+            Map<String, String> provenance,
+            Map optionData,
+            String jobFilter,
+            String asUser
+    )
+        throws JobNotFound, JobExecutionError {
+        def inputOpts = [executionType: executionType, provenance: provenance]
         optionData.each { k, v ->
             inputOpts['option.'+k] = v
         }
         return doRunJob(jobFilter, inputOpts, jobReference, auth, asUser)
+
+    }
+
+    @Override
+    ExecutionReference runJob(
+            UserAndRolesAuthContext auth,
+            JobReference jobReference,
+            Map optionData,
+            String jobFilter,
+            String asUser
+    )
+            throws JobNotFound, JobExecutionError {
+        return runJob(auth, jobReference, 'user', [:], optionData, jobFilter, asUser)
+
     }
 
     ExecutionReference doRunJob(
@@ -308,7 +339,9 @@ class JobStateService implements AuthorizingJobService {
             }
         }
 
-        inputOpts['executionType'] = 'user'
+        if (!inputOpts['executionType']) {
+            inputOpts['executionType'] = 'user'
+        }
 
         def se = ScheduledExecution.findByUuidAndProject(jobReference.id, jobReference.project)
         if (!se || !frameworkService.authorizeProjectJobAny(

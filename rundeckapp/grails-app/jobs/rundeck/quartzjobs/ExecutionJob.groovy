@@ -335,7 +335,12 @@ class ExecutionJob implements InterruptableJob {
                     project
             )
             initMap.secureOptsExposed = initMap.executionService.selectSecureOptionInput(initMap.scheduledExecution,[:],true)
-            initMap.execution = initMap.executionService.createExecution(initMap.scheduledExecution,initMap.authContext,null,[executionType:'scheduled'])
+            initMap.execution = initMap.executionService.createExecution(
+                    initMap.scheduledExecution,
+                    initMap.authContext,
+                    null,
+                    [executionType: 'scheduled', provenance: [source: 'job-trigger', cron:initMap.scheduledExecution.generateCrontabExression()]]
+            )
         }
         if (!initMap.authContext) {
             throw new RuntimeException("authContext could not be determined")
