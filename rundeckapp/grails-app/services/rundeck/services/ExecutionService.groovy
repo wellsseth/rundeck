@@ -2268,7 +2268,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             throw new ExecutionServiceException("executionType is required")
         }
         props.executionType = input['executionType']
-        props.provenance = input['provenance']||[:]
+        props.provenance = input['provenance']?:[:]
 
         //evaluate embedded Job options for validation
         HashMap optparams = validateJobInputOptions(props, se, authContext)
@@ -2333,7 +2333,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         }
         if (!execution.save(flush:true)) {
             execution.errors.allErrors.each { log.warn(it.toString()) }
-            def msg=execution.errors.allErrors.collect { ObjectError err-> lookupMessage(err.codes,err.arguments,err.defaultMessage) }.join(", ")
+            def msg=execution.errors.allErrors.collect { ObjectError err-> lookupMessage(err.codes,err.arguments.toList(),err.defaultMessage) }.join(", ")
             log.error("unable to create execution: " + msg)
             throw new ExecutionServiceException("unable to create execution: "+msg)
         }
