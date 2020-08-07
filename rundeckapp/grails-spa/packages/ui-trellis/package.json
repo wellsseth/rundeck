@@ -59,6 +59,7 @@
     "less-loader": "^6.1.0",
     "mobx": "^5.15.4",
     "mobx-utils": "^5.6.1",
+    "mobx-vue": "^2.0.10",
     "node-fetch": "^2.6.0",
     "node-sass": "^4.14.1",
     "prex": "^0.4.7",
