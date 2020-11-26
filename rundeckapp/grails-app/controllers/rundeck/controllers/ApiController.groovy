@@ -193,32 +193,43 @@ class ApiController extends ControllerBase{
             flush(response)
         }
     }
+
+
+    /*
+     * Token API endpoints
+     */
+
     /**
-     * /api/11/token/$token
+     * /api/11/token/$tokenid
      */
     def apiTokenManage() {
         if (!apiService.requireApi(request, response)) {
             return
         }
 
-        if (!apiService.requireParameters(params, response, ['token'])) {
+        // API V18 and earlier require showing token data which is not possible
+        // anymore.
+        if (!apiService.requireVersion(request, response, ApiVersions.V19)) {
+            return
+        }
+
+        if (!apiService.requireParameters(params, response, ['tokenid'])) {
             return
         }
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
         def adminAuth = apiService.hasTokenAdminAuth(authContext)
 
-        if (request.api_version < ApiVersions.V19 && !adminAuth) {
-            return apiService.renderUnauthorized(response, [AuthConstants.ACTION_ADMIN, 'Rundeck', 'User account'])
-        }
+//        if (request.api_version < ApiVersions.V19 && !adminAuth) {
+//            return apiService.renderUnauthorized(response, [AuthConstants.ACTION_ADMIN, 'Rundeck', 'User account'])
+//        }
 
-        //admin: search by token ID then token value
+        //admin: search by token ID
         //user: search for token ID owned by user
         AuthToken oldtoken = adminAuth ?
-                (apiService.findTokenId(params.token) ?: apiService.findUserTokenValue(params.token)) :
-                apiService.findUserTokenId(authContext.username, params.token)
+                apiService.findTokenId(params.tokenid) :
+                apiService.findUserTokenId(authContext.username, params.tokenid)
 
-
-        if (!apiService.requireExistsFormat(response, oldtoken, ['Token', params.token])) {
+        if (!apiService.requireExistsFormat(response, oldtoken, ['Token', params.tokenid])) {
             return
         }
 
@@ -240,13 +251,22 @@ class ApiController extends ControllerBase{
         if (!apiService.requireApi(request, response)) {
             return
         }
+
+        // API V18 and earlier require showing token data which is not possible
+        // anymore.
+        if (!apiService.requireVersion(request, response, ApiVersions.V19)) {
+            return
+        }
+
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
 
         def adminAuth = apiService.hasTokenAdminAuth(authContext)
 
+/*
         if (request.api_version < ApiVersions.V19 && !adminAuth) {
             return apiService.renderUnauthorized(response, [AuthConstants.ACTION_ADMIN, 'Rundeck', 'User account'])
         }
+*/
 
         if (!adminAuth && params.user && params.user != authContext.username) {
             return apiService.renderUnauthorized(response, [AuthConstants.ACTION_ADMIN, 'User', params.user])
@@ -259,11 +279,19 @@ class ApiController extends ControllerBase{
         } else {
             tokenlist = AuthToken.list()
         }
-        def apiv19 = request.api_version >= ApiVersions.V19
-        def data = new ListTokens(params.user, !params.user, tokenlist.findAll { it.type != AuthTokenType.WEBHOOK }.collect { new Token(it, apiv19) })
+
+        // From now on we always mask tokens.
+//        def apiv19 = request.api_version >= ApiVersions.V19
+
+        def data = new ListTokens(params.user, !params.user, tokenlist.findAll {
+            it.type != AuthTokenType.WEBHOOK
+        }.collect {
+            new Token(it)
+        })
 
         respond(data, [formats: ['xml', 'json']])
     }
+
 
     /**
      * POST /api/11/tokens/$user?
@@ -356,7 +384,10 @@ class ApiController extends ControllerBase{
                     authContext,
                     tokenDurationSeconds ?: null,
                     tokenuser,
-                    rolesSet
+                    rolesSet,
+                    true,
+                    AuthTokenType.USER,
+                    params.name
             )
         } catch (Exception e) {
             return apiService.renderErrorFormat(response, [
@@ -367,7 +398,7 @@ class ApiController extends ControllerBase{
             )
         }
         response.status = HttpServletResponse.SC_CREATED
-        respond(new Token(token), [formats: ['xml', 'json']])
+        respond(new Token(token, false), [formats: ['xml', 'json']])
     }
 
     /**
@@ -408,6 +439,11 @@ class ApiController extends ControllerBase{
                 [formats: ['json', 'xml']]
         )
     }
+
+    /*
+    End of token API endpoints
+     */
+
     /**
      * /api/1/system/info: display stats and info about the server
      */
